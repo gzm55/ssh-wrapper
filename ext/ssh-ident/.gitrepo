@@ -1,0 +1,11 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/ccontavalli/ssh-ident.git
+	branch = master
+	commit = fbdcc65738416aadb6317889b5b0b05606aadb88
+	parent = e464b57666ea1cad9d67934311fdadb1fc85cac2
+	cmdver = 0.3.1
