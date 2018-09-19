@@ -38,7 +38,7 @@ else
 fi
 
 ## Fix PATH
-new_path=
+effective_path=
 while read a_path; do
   case "$a_path" in
   ("") continue ;;
@@ -52,14 +52,15 @@ while read a_path; do
   ## Bypass dir for current script
   ("$dir0"|"${dir0}/") continue ;;
   esac
-  case ":$new_path:" in
+  case ":$effective_path:" in
   (*":$a_path:"*) continue ;; ## dedup
   esac
-  new_path="$new_path":"$a_path"
+  effective_path="$effective_path":"$a_path"
 done <<-END
-	$(parse_path "$PATH")
+	$(IFS=:;printf:%s\\n:$PATH)
 	END
-new_path="${new_path#:}"
+effective_path="${effective_path#:}"
+effective_cmd="$(PATH="$effective_path" which "$cmd")"
 
 ## Check ssh-ident
 if command -v ssh-ident >/dev/null; then
@@ -67,8 +68,7 @@ if command -v ssh-ident >/dev/null; then
 elif [ -x "${SSH_IDENT_DIR-}/ssh-ident" ]; then
   SSH_IDENT="${SSH_IDENT_DIR-}/ssh-ident"
 else
-  cmd="$(PATH="$new_path" which "$cmd")"
-  exec "$cmd" "$@"
+  exec "$effective_cmd" "$@"
 fi
 
 ## Check if need run ssh-ident
@@ -133,7 +133,11 @@ case "$cmd" in
 (ssh)         ssh_opt_has_remote   "$@" ;;
 (scp)         scp_opt_has_remote   "$@" ;;
 (rsync)       rsync_opt_has_remote "$@" ;;
-(ssh-copy-id) ssh_opt_has_remote   "$@" ;;
-esac || PATH="$new_path" exec "$(PATH="$new_path" which "$cmd")" "$@" 
+(ssh-copy-id)
+  ssh_opt_has_remote "$@" && PATH="$effective_path"
+  ## ssh-copy-id will call ssh multiple times, so use the $effective_path
+  ## to force reuse the currect ssh-agent session
+  ;;
+esac || PATH="$effective_path" exec "$effective_cmd" "$@"
 
-PATH="$new_path" BINARY_SSH="${BINARY_SSH:-"$(PATH="$new_path" which "$cmd")"}" exec "$SSH_IDENT" "$@"
+BINARY_SSH="${BINARY_SSH:-"$effective_cmd"}" exec "$SSH_IDENT" "$@"
