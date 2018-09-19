@@ -13,11 +13,7 @@ set -eu
 #  Env Switch:
 #    DEBUG - if set to true, debug this script
 #    NO_BREW - if set to true, skip brew installed openssh
-#    SSH_IDENT_DIR - where to find ssh-ident, if unset, only find ssh-ident in $PATH
 
-
-## Functions
-parse_path() ( IFS=:; printf:"%s\n":${1:-$PATH} )
 
 ## Check entry name
 cmd="$(basename -- "$0")"
@@ -61,15 +57,6 @@ done <<-END
 	END
 effective_path="${effective_path#:}"
 effective_cmd="$(PATH="$effective_path" which "$cmd")"
-
-## Check ssh-ident
-if command -v ssh-ident >/dev/null; then
-  SSH_IDENT=ssh-ident
-elif [ -x "${SSH_IDENT_DIR-}/ssh-ident" ]; then
-  SSH_IDENT="${SSH_IDENT_DIR-}/ssh-ident"
-else
-  exec "$effective_cmd" "$@"
-fi
 
 ## Check if need run ssh-ident
 ssh_opt_has_remote() {
@@ -139,5 +126,17 @@ case "$cmd" in
   ## to force reuse the currect ssh-agent session
   ;;
 esac || PATH="$effective_path" exec "$effective_cmd" "$@"
+
+## Check ssh-ident
+SSH_IDENT=
+if [ -L "$0" ]; then
+  SSH_IDENT="$(dirname -- "$(readlink -- "$0")")/ext/ssh-ident/ssh-ident"
+else
+  SSH_IDENT="$dir0/ext/ssh-ident/ssh-ident"
+fi
+if [ ! -x "$SSH_IDENT" ]; then
+  echo "[ERROR] cannot find ssh-ident at $SSH_IDENT" >&2
+  exit 1
+fi
 
 BINARY_SSH="${BINARY_SSH:-"$effective_cmd"}" exec "$SSH_IDENT" "$@"
