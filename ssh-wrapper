@@ -1,0 +1,139 @@
+#!/bin/sh
+
+set -eu
+[ :"${DEBUG-}" != :true ] || set -x
+
+## Usage:
+#
+#  Installed as symlink to this script, link name is ssh|scp|rsync,
+#    then put the dir into PATH.
+#
+#  basename $0 as wrappered command
+#
+#  Env Switch:
+#    DEBUG - if set to true, debug this script
+#    NO_BREW - if set to true, skip brew installed openssh
+#    SSH_IDENT_DIR - where to find ssh-ident, if unset, only find ssh-ident in $PATH
+
+
+## Functions
+parse_path() ( IFS=:; printf:"%s\n":${1:-$PATH} )
+
+## Check entry name
+cmd="$(basename -- "$0")"
+dir0="$(dirname -- "$0")"
+
+case "$cmd" in
+(ssh|scp|rsync) ;;
+(ssh-copy-id) NO_BREW=true ;; # on macos, ssh-copy-id use a mac-only feature, so skip the brew version
+(*) echo "[ERROR] ssh-wrapper must be linked as ssh or scp or rsync" >&2
+    exit ;;
+esac
+
+brew_prefix=
+if command -v brew >/dev/null; then
+  brew_prefix="$(brew --prefix)"
+else
+  unset NO_BREW
+fi
+
+## Fix PATH
+new_path=
+while read a_path; do
+  case "$a_path" in
+  ("") continue ;;
+  ("${brew_prefix}/bin"|"${brew_prefix}/sbin"|"${brew_prefix}/bin/"|"${brew_prefix}/sbin/")
+    ## Bypass brew installed binary if required
+    case "$brew_prefix::${NO_BREW-}" in
+    (""::*) ;;
+    (*::true) continue ;;
+    esac
+    ;;
+  ## Bypass dir for current script
+  ("$dir0"|"${dir0}/") continue ;;
+  esac
+  case ":$new_path:" in
+  (*":$a_path:"*) continue ;; ## dedup
+  esac
+  new_path="$new_path":"$a_path"
+done <<-END
+	$(parse_path "$PATH")
+	END
+new_path="${new_path#:}"
+
+## Check ssh-ident
+if command -v ssh-ident >/dev/null; then
+  SSH_IDENT=ssh-ident
+elif [ -x "${SSH_IDENT_DIR-}/ssh-ident" ]; then
+  SSH_IDENT="${SSH_IDENT_DIR-}/ssh-ident"
+else
+  cmd="$(PATH="$new_path" which "$cmd")"
+  exec "$cmd" "$@"
+fi
+
+## Check if need run ssh-ident
+ssh_opt_has_remote() {
+  while [ $# -gt 0 ]; do
+    case "$1" in
+    (-[bcDEeFIiJLlmOopQRSWw]) shift 2 || : ;;
+    (-[bcDEeFIiJLlmOopQRSWw]*) shift || : ;;
+    (-*[bcDEeFIiJLlmOpQRSWw])
+      case "$1" in
+      (-*[GOQV]*) return 1 ;;
+      esac
+      shift 2 || : ;;
+    (-*)
+      case "$1" in
+      (-*[GOQV]*) return 1 ;;
+      esac
+      shift || : ;;
+    (*) return 0
+    esac
+  done
+  return 1
+}
+
+scp_opt_has_remote() {
+  while [ $# -gt 0 ]; do
+    case "$1" in
+    (-[cFiloPS]) shift 2 || : ;;
+    (-[cFiloPS]*) shift || : ;;
+    (-*[cFilPS]) shift 2 || : ;;
+    (-*) shift || : ;;
+    (*:|*:*) return 0 ;; ## ssh proto
+    (*) shift || : ;; ## local
+    esac
+  done
+  return 1
+}
+
+rsync_opt_has_remote() {
+  while [ $# -gt 0 ]; do
+    case "$1" in
+    (--daemon|--help|-h) return 1 ;;
+    (--*=*) shift || : ;;
+    (--backup-dir|--suffix|--chmod|--block-size|--rsh) shift 2 || : ;;
+    (--rsync-path|--max-delete|--max-size|--min-size) shift 2 || : ;;
+    (--partial-dir|--timeout|--modify-window|--temp-dir) shift 2 || : ;;
+    (--compare-dest|--copy-dest|--link-dest|--compress-level) shift 2 || : ;;
+    (--filter|--exclude|--exclude-from|--include) shift 2 || : ;;
+    (--include-from|--files-from|--address|--port) shift 2 || : ;;
+    (--sockopts|--out-format|--log-file|--log-file-format) shift 2 || : ;;
+    (--password-file|--bwlimit|--write-batch|--only-write-batch) shift 2 || : ;;
+    (--read-batch|--protocol|--checksum-seed|--config) shift 2 || : ;;
+    (-*|rsync://*|*::|*::*) shift || : ;; ## rsync proto
+    (*:|*:*) return 0 ;; ## ssh proto
+    (*) shift || : ;; ## local
+    esac
+  done
+  return 1
+}
+
+case "$cmd" in
+(ssh)         ssh_opt_has_remote   "$@" ;;
+(scp)         scp_opt_has_remote   "$@" ;;
+(rsync)       rsync_opt_has_remote "$@" ;;
+(ssh-copy-id) ssh_opt_has_remote   "$@" ;;
+esac || PATH="$new_path" exec "$(PATH="$new_path" which "$cmd")" "$@" 
+
+PATH="$new_path" BINARY_SSH="${BINARY_SSH:-"$(PATH="$new_path" which "$cmd")"}" exec "$SSH_IDENT" "$@"
