@@ -163,4 +163,4 @@ if [ ! -x "$SSH_IDENT" ]; then
   exit 1
 fi
 
-BINARY_SSH="${BINARY_SSH:-"$effective_cmd"}" exec "$SSH_IDENT" "$@"
+BINARY_SSH="$effective_cmd" exec "$SSH_IDENT" "$@"
