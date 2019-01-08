@@ -59,22 +59,25 @@ effective_path="${effective_path#:}"
 effective_cmd="$(PATH="$effective_path" which "$cmd")"
 
 ## Check if need run ssh-ident
+## ut: "ssh '-vouser G' xxx" should return 1
+## ut: "ssh '-vGouser G' xxx" should return 0
+## ut: "ssh '-Q cmd' xxx" should return 0
+## ut: "ssh '-O cmd' xxx" should return 0
 ssh_opt_has_remote() {
+  local flag_with_param=bcDEeFIiJLlmOopQRSWw
   while [ $# -gt 0 ]; do
-    case "$1" in
-    (-[bcDEeFIiJLlmOopQRSWw]) shift 2 || : ;;
-    (-[bcDEeFIiJLlmOopQRSWw]*) shift || : ;;
-    (-*[bcDEeFIiJLlmOpQRSWw])
-      case "$1" in
-      (-*[GOQV]*) return 1 ;;
-      esac
-      shift 2 || : ;;
-    (-*)
-      case "$1" in
-      (-*[GOQV]*) return 1 ;;
-      esac
-      shift || : ;;
-    (*) return 0
+    local single_flags="${1%%[$flag_with_param]*}"
+    local param_flag="${1#$single_flags}"
+    case "$single_flags" in
+    (-*[GV]*) return 1 ;;
+    (-*) ;;
+    (*) return 0 ;;
+    esac
+    case "$param_flag" in
+    ('') shift || : ;;
+    ([OQ]*) return 1 ;;
+    ([$flag_with_param]) shift 2 || : ;;
+    ([$flag_with_param]*) shift || : ;;
     esac
   done
   return 1
