@@ -63,6 +63,8 @@ effective_cmd="$(PATH="$effective_path" which "$cmd")"
 ## ut: "ssh '-vGouser G' xxx" should return 0
 ## ut: "ssh '-Q cmd' xxx" should return 0
 ## ut: "ssh '-O cmd' xxx" should return 0
+## ut: "ssh Oxxx" should return 0
+## ut: "ssh ''" should return 0
 ssh_opt_has_remote() {
   local flag_with_param=bcDEeFIiJLlmOopQRSWw
   while [ $# -gt 0 ]; do
@@ -84,14 +86,22 @@ ssh_opt_has_remote() {
 }
 
 scp_opt_has_remote() {
+  local flag_with_param=cFiloPS
   while [ $# -gt 0 ]; do
-    case "$1" in
-    (-[cFiloPS]) shift 2 || : ;;
-    (-[cFiloPS]*) shift || : ;;
-    (-*[cFilPS]) shift 2 || : ;;
-    (-*) shift || : ;;
-    (*:|*:*) return 0 ;; ## ssh proto
-    (*) shift || : ;; ## local
+    local single_flags="${1%%[$flag_with_param]*}"
+    local param_flag="${1#$single_flags}"
+    case "$single_flags" in
+    (-*) ;;
+    (*) case "$1" in
+        (*:|*:*) return 0 ;; ## ssh proto
+        (*) shift || : ; continue ;; ## local
+        esac
+	;;
+    esac
+    case "$param_flag" in
+    ('') shift || : ;;
+    ([$flag_with_param]) shift 2 || : ;;
+    ([$flag_with_param]*) shift || : ;;
     esac
   done
   return 1
