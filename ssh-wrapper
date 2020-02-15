@@ -5,7 +5,7 @@ set -eu
 
 ## Usage:
 #
-#  Installed as symlink to this script, link name is ssh|scp|rsync,
+#  Installed as symlink to this script, link name is ssh|scp|rsync|ssh-copy-id,
 #    then put the dir into PATH.
 #
 #  basename $0 as wrappered command
